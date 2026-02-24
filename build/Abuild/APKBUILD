@@ -1,0 +1,113 @@
+# Alpine-Maintainer: Natanael Copa <ncopa@alpinelinux.org>
+# Maintainer: Ethan Leir <eleir@qnx.com>
+pkgname=lua5.2
+pkgver=5.2.4
+_luaver=${pkgname#lua}
+pkgrel=0
+pkgdesc="Powerful light-weight programming language"
+url="https://www.lua.org/"
+arch="all"
+license="MIT"
+ldpath="/usr/lib/$pkgname"
+makedepends="libtool autoconf automake readline-dev"
+provides="lua"
+provider_priority=200
+subpackages="$pkgname-dev $pkgname-doc $pkgname-libs"
+source="https://www.lua.org/ftp/lua-$pkgver.tar.gz
+    lua.pc
+    lua-5.2-make.patch
+    lua-5.2-module_paths.patch
+    "
+builddir="$srcdir"/lua-$pkgver
+
+prepare() {
+    default_prepare
+
+    # we use libtool
+    echo "top_buildir=." >configure.ac
+    echo "AC_INIT(src/luaconf.h)" >>configure.ac
+    echo "AC_PROG_LIBTOOL" >>configure.ac
+    echo "AC_OUTPUT()" >>configure.ac
+
+    libtoolize --force --install && aclocal && autoconf
+}
+
+build() {
+    # Prepare lua.pc
+    if ! [[ -e $srcdir/lua.pc ]]; then
+        die "Need lua.pc"
+    fi
+    sed "s/%VER%/$_luaver/g;s/%REL%/$pkgver/g;s/%NAME%/$pkgname/g;" $srcdir/lua.pc > $srcdir/lua.pc.patched
+
+    CFLAGS="$CFLAGS -Qunused-arguments"
+    ./configure \
+        --build=$CBUILD \
+        --host=$CHOST \
+        --prefix=/usr
+    cd src
+    make V=$pkgver \
+        CFLAGS="$CFLAGS -DLUA_USE_POSIX -DLUA_USE_DLOPEN -DLUA_USE_READLINE -DLUA_COMPAT_ALL" \
+        SYSLDFLAGS="$LDFLAGS" \
+        RPATH="/usr/lib" \
+        LIB_LIBS="-lm -lreadline" \
+        qnx_all
+}
+
+check() {
+    make test
+}
+
+package() {
+    make V=$pkgver \
+        INSTALL_TOP="$pkgdir"/usr \
+        INSTALL_INC="$pkgdir"/usr/include/$pkgname \
+        INSTALL_LIB="$pkgdir"/usr/lib/$pkgname \
+        qnx_install
+
+    for i in "$pkgdir"/usr/bin/* ; do
+        mv $i ${i}${_luaver}
+    done
+
+    for i in "$pkgdir"/usr/lib/$pkgname/*.so.*; do
+        ln -s $pkgname/${i##*/} "$pkgdir"/usr/lib/${i##*/}
+    done
+
+    install -D -m 644 doc/lua.1 "$pkgdir"/usr/share/man/man1/lua$_luaver.1 \
+        && install -D -m 644 doc/luac.1 \
+            "$pkgdir"/usr/share/man/man1/luac$_luaver.1
+
+    mkdir -p "$pkgdir"/usr/share/doc/$pkgname/
+    install -m644 doc/*.html doc/*.css doc/logo.gif doc/osi-certified-72x60.png \
+        "$pkgdir"/usr/share/doc/$pkgname/
+
+    install -d "$pkgdir"/usr/lib/pkgconfig
+    install -Dm644 $srcdir/lua.pc.patched "$pkgdir"/usr/lib/pkgconfig/lua$_luaver.pc
+
+    # compat names since we are unique
+    # other distros name it lua-5.2 or lua52. pick the former as a compat name..
+    ln -sv lua$_luaver.pc "$pkgdir"/usr/lib/pkgconfig/lua-$_luaver.pc
+}
+
+dev() {
+    depends_dev=$pkgname
+    default_dev
+    mkdir -p "$subpkgdir"/usr/$pkgname "$subpkgdir"/usr/lib/$pkgname
+    ln -s ../include/$pkgname "$subpkgdir"/usr/$pkgname/include
+    ln -s ../lib/$pkgname "$subpkgdir"/usr/$pkgname/lib
+    mv "$pkgdir"/usr/lib/$pkgname/liblua.so "$subpkgdir"/usr/lib/$pkgname/
+}
+
+libs() {
+    pkgdesc="Lua dynamic library runtime"
+    depends="$pkgname readline"
+    replaces="lua"
+    mkdir -p "$subpkgdir"/usr
+    mv "$pkgdir"/usr/lib "$subpkgdir"/usr/
+}
+
+sha512sums="
+cd77148aba4b707b6c159758b5e8444e04f968092eb98f6b4c405b2fb647e709370d5a8dcf604176101d3407e196a7433b5dcdce4fe9605c76191d3649d61a8c  lua-5.2.4.tar.gz
+096b61674ca5b7760bf2dcc7ffe5621474fde43a2dfd91a4d98144919fdfb765fa049e1080beb89204e652dfdd770c2495735aafb83c028d6a8906c310591ee2  lua.pc
+e1fcfb2e27a3573231e033b6cd4747d63efadc3013cb3240d1da47c343a79727902119f271f2c53b40c6c980b5ce6d4323b7f711dd20b191d3216a0f16aa35c5  lua-5.2-make.patch
+ca11e6b92acbdb3430faeeaa45fe1326043c3fff19da22a5d22ca38bff98635df3e33266046b1bf02302090f222dd5ab28759b4ed587da26ceb6e1dae6859829  lua-5.2-module_paths.patch
+"
