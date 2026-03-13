@@ -3,7 +3,7 @@
 pkgname=lua5.2
 pkgver=5.2.4
 _luaver=${pkgname#lua}
-pkgrel=0
+pkgrel=${pkgrel:-0}
 pkgdesc="Powerful light-weight programming language"
 url="https://www.lua.org/"
 arch="all"
@@ -105,6 +105,7 @@ libs() {
     mv "$pkgdir"/usr/lib "$subpkgdir"/usr/
 }
 
+options="$options ${DISABLE_CHECK:+!check}"
 sha512sums="
 cd77148aba4b707b6c159758b5e8444e04f968092eb98f6b4c405b2fb647e709370d5a8dcf604176101d3407e196a7433b5dcdce4fe9605c76191d3649d61a8c  lua-5.2.4.tar.gz
 096b61674ca5b7760bf2dcc7ffe5621474fde43a2dfd91a4d98144919fdfb765fa049e1080beb89204e652dfdd770c2495735aafb83c028d6a8906c310591ee2  lua.pc
